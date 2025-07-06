@@ -1,5 +1,13 @@
-# Ignore Gradle project-specific cache directory
-.gradle
+# Java build output
+/build/
+/out/
+/bin/
 
-# Ignore Gradle build output directory
-build
+# Gradle files
+.gradle/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# VS Code
+.vscode/
