@@ -30,7 +30,6 @@ tasks.jacocoTestReport {
     }
 
     val fileFilter = listOf(
-        "**/HealthBEService/**",
         "**/*Test*"
     )
 
