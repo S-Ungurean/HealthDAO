@@ -15,8 +15,9 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class JobDTO {
+    
     @NonNull
-    private String JobId;
+    private String jobId;
 
     @NonNull
     private String objectLink;

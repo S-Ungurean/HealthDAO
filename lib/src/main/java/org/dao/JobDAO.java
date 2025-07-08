@@ -3,9 +3,10 @@ package org.dao;
 import java.util.Optional;
 
 import org.dao.models.JobDTO;
+import org.dao.models.JobRequest;
 
 public interface JobDAO {
-    void createJob();
+    void createJob(JobRequest request);
 
     Optional<JobDTO> findByJobId(int id);
 }

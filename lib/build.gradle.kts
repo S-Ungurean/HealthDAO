@@ -57,7 +57,7 @@ dependencies {
     implementation("org.junit.jupiter:junit-jupiter-api:5.9.1")
 
     // This dependency is used by the application.
-    implementation(libs.guava)
+    implementation("com.google.guava:guava:31.1-jre")
     implementation("org.glassfish.jersey.containers:jersey-container-grizzly2-http:3.1.3")
     implementation("org.glassfish.jersey.media:jersey-media-json-jackson:3.0.3")
     implementation("org.glassfish.jersey.inject:jersey-hk2:3.1.3")
@@ -76,6 +76,9 @@ dependencies {
     // Dagger core
     implementation("com.google.dagger:dagger:2.51")
     annotationProcessor("com.google.dagger:dagger-compiler:2.51")
+
+    // Cassandra
+    implementation("com.datastax.oss:java-driver-core:4.17.0")
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
