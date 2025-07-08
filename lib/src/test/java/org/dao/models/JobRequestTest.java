@@ -13,10 +13,10 @@ public class JobRequestTest {
     @BeforeAll
     static void setup() {
         jobDTO = JobDTO.builder()
-            .JobId(1)
+            .JobId("1")
             .status(Status.SUCCESS)
             .timeStamp("timeStamp")
-            .ojectLink("link")
+            .objectLink("link")
             .build();
     }
 

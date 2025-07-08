@@ -16,10 +16,10 @@ import lombok.Setter;
 @AllArgsConstructor
 public class JobDTO {
     @NonNull
-    private int JobId;
+    private String JobId;
 
     @NonNull
-    private String ojectLink;
+    private String objectLink;
 
     @NonNull
     private Status status;
