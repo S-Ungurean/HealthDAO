@@ -27,7 +27,7 @@ public class JobDTOTest {
     @Test
     void testBuilderCreatesObject() {
         JobDTO jobDTO = JobDTO.builder()
-            .JobId(jobId)
+            .jobId(jobId)
             .objectLink(objectLink)
             .status(status)
             .timeStamp(timeStamp)
@@ -62,7 +62,7 @@ public class JobDTOTest {
     void testNonNullEnforced() {
         assertThrows(NullPointerException.class, () -> {
             JobDTO.builder()
-                .JobId(null)
+                .jobId(null)
                 .objectLink(null)
                 .status(null)
                 .timeStamp(null)

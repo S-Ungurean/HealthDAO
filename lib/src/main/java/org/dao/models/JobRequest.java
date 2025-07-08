@@ -14,5 +14,5 @@ import lombok.Setter;
 @AllArgsConstructor
 public class JobRequest {
     @NonNull
-    private JobDTO jobDTO;
+    private String jobId;
 }
