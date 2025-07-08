@@ -28,7 +28,7 @@ public class JobRequestTest {
                                           .build();
 
         assertNotNull(jobRequest);
-        assertEquals(1, jobRequest.getJobDTO().getJobId());
+        assertEquals("1", jobRequest.getJobDTO().getJobId());
     }
 
     @Test
@@ -36,7 +36,7 @@ public class JobRequestTest {
         JobRequest jobRequest = new JobRequest();
         jobRequest.setJobDTO(jobDTO);
 
-        assertEquals(1, jobRequest.getJobDTO().getJobId());
+        assertEquals("1", jobRequest.getJobDTO().getJobId());
     }
 
     @Test
