@@ -3,6 +3,7 @@ package org.dao.imp;
 import java.util.Optional;
 
 import org.dao.JobDAO;
+import org.dao.clients.CassandraClient;
 import org.dao.models.JobDTO;
 import org.dao.models.JobRequest;
 import org.dao.models.Status;
@@ -17,15 +18,17 @@ import jakarta.inject.Inject;
 
 public class JobDAOImp implements JobDAO{
 
-    private CqlSession cqlSession;
+    private CassandraClient cassandraClient;
     
     @Inject
-    public JobDAOImp(CqlSession cqlSession) {
-        this.cqlSession = cqlSession;
+    public JobDAOImp(CassandraClient cassandraClient) {
+        this.cassandraClient = cassandraClient;
     }
 
     @Override
     public void createJob(JobRequest request) {
+        CqlSession cqlSession = cassandraClient.getSession();
+
         JobDTO jobDTO = JobDTO.builder()
             .jobId(request.getJobId())
             .objectLink("test")
@@ -44,6 +47,7 @@ public class JobDAOImp implements JobDAO{
 
     @Override
     public Optional<JobDTO> findByJobId(String jobId) {
+        CqlSession cqlSession = cassandraClient.getSession();
 
         PreparedStatement stmt = cqlSession.prepare(
             "SELECT jobId, status, linkToObject, timeStamp, metadata FROM jobs WHERE jobId = ?"
