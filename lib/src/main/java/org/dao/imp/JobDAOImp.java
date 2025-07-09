@@ -1,6 +1,5 @@
 package org.dao.imp;
 
-import java.net.InetSocketAddress;
 import java.util.Optional;
 
 import org.dao.JobDAO;
