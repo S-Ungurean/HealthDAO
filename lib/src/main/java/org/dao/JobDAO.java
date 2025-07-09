@@ -8,5 +8,5 @@ import org.dao.models.JobRequest;
 public interface JobDAO {
     void createJob(JobRequest request);
 
-    Optional<JobDTO> findByJobId(int id);
+    Optional<JobDTO> findByJobId(String id);
 }
