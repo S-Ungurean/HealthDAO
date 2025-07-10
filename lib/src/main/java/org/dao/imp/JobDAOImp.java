@@ -109,7 +109,7 @@ public class JobDAOImp implements JobDAO{
         try {
             CqlSession cqlSession = cassandraClient.getSession();
             PreparedStatement updateStatus = cqlSession.prepare(updateStatusStatement);
-            BoundStatement bound = updateStatus.bind(status, jobId);
+            BoundStatement bound = updateStatus.bind(status.toValue(), jobId);
             cqlSession.execute(bound);
         } catch (Exception e) {
             log.error("Failed to update status of record with jobId: " + jobId);
