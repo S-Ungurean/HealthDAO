@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.time.Instant;
+
 import org.junit.jupiter.api.Test;
 
 public class JobRequestTest {
@@ -12,6 +14,8 @@ public class JobRequestTest {
     void testBuilderCreatesObject() {
         JobRequest jobRequest = JobRequest.builder()
                                           .jobId("1")
+                                          .requestId("1")
+                                          .timeStamp(Instant.now())
                                           .build();
 
         assertNotNull(jobRequest);
