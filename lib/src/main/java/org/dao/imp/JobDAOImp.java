@@ -18,11 +18,21 @@ import jakarta.inject.Inject;
 
 public class JobDAOImp implements JobDAO{
 
+    private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, linkToObject, timeStamp, metadata) VALUES (?, ?, ?, ?, ?)";
+    private static String queryByJobIdStatement = "SELECT jobId, status, linkToObject, timeStamp, metadata FROM job_ks.jobs WHERE jobId = ?";
+    private static String updateLinkToObjectStatement = "UPDATE job_ks.jobs SET linkToObject = ? WHERE jobId = ?";
+
     private CassandraClient cassandraClient;
+    private final PreparedStatement insert;
+    private final PreparedStatement queryByJobId;
+    private final PreparedStatement updateLinkToObject;
     
     @Inject
     public JobDAOImp(CassandraClient cassandraClient) {
         this.cassandraClient = cassandraClient;
+        this.insert = cassandraClient.getSession().prepare(insertStatement);
+        this.queryByJobId = cassandraClient.getSession().prepare(queryByJobIdStatement);
+        this.updateLinkToObject = cassandraClient.getSession().prepare(updateLinkToObjectStatement);
     }
 
     @Override
@@ -31,30 +41,29 @@ public class JobDAOImp implements JobDAO{
 
         JobDTO jobDTO = JobDTO.builder()
             .jobId(request.getJobId())
-            .objectLink("test")
+            .objectLink(null)
             .status(Status.SUCCESS)
             .timeStamp("test")
+            .metadata(null)
             .build();
 
-        
-        String write = "INSERT INTO jobs (jobId, status, linkToObject, timeStamp, metadata) VALUES (?, ?, ?, ?, ?)";
+        BoundStatement bs = insert.bind(
+            jobDTO.getJobId(),
+            jobDTO.getStatus().toValue(),
+            jobDTO.getObjectLink(),
+            jobDTO.getTimeStamp(),
+            jobDTO.getMetadata());
 
-        PreparedStatement ps = cqlSession.prepare(write);
-
-        BoundStatement bs = ps.bind(jobDTO.getJobId(), jobDTO.getStatus().toValue(), jobDTO.getObjectLink(), jobDTO.getTimeStamp(), jobDTO.getMetadata());
         cqlSession.execute(bs);
     }
 
     @Override
     public Optional<JobDTO> findByJobId(String jobId) {
         CqlSession cqlSession = cassandraClient.getSession();
-
-        PreparedStatement stmt = cqlSession.prepare(
-            "SELECT jobId, status, linkToObject, timeStamp, metadata FROM jobs WHERE jobId = ?"
-        );
         
-        BoundStatement bound = stmt.bind(jobId);
+        BoundStatement bound = queryByJobId.bind(jobId);
         ResultSet rs = cqlSession.execute(bound);
+
         Row row = rs.one();
 
         JobDTO jobDTO = JobDTO.builder()
@@ -66,6 +75,14 @@ public class JobDAOImp implements JobDAO{
             .build();
 
         return Optional.ofNullable(jobDTO);
+    }
+
+    @Override
+    public void updateLinkToObject(String jobId, String objectLink) {
+        CqlSession cqlSession = cassandraClient.getSession();
+
+        BoundStatement bound = updateLinkToObject.bind(objectLink, jobId);
+        cqlSession.execute(bound);
     }
 
 

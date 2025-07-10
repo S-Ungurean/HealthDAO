@@ -19,7 +19,6 @@ public class JobDTO {
     @NonNull
     private String jobId;
 
-    @NonNull
     private String objectLink;
 
     @NonNull

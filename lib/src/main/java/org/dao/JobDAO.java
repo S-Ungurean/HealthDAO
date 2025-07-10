@@ -9,4 +9,6 @@ public interface JobDAO {
     void createJob(JobRequest request);
 
     Optional<JobDTO> findByJobId(String id);
+
+    void updateLinkToObject(String jobId, String objectLink);
 }
