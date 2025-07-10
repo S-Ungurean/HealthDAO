@@ -23,6 +23,7 @@ public class JobDAOImp implements JobDAO{
     private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, linkToObject, timeStamp, metadata) VALUES (?, ?, ?, ?, ?)";
     private static String queryByJobIdStatement = "SELECT jobId, status, linkToObject, timeStamp, metadata FROM job_ks.jobs WHERE jobId = ?";
     private static String updateLinkToObjectStatement = "UPDATE job_ks.jobs SET linkToObject = ? WHERE jobId = ?";
+    private static String updateStatusStatement = "UPDATE job_ks.jobs SET status = ? WHERE jobId = ?";
 
     private CassandraClient cassandraClient;
     
@@ -54,6 +55,7 @@ public class JobDAOImp implements JobDAO{
                 jobDTO.getMetadata());
             cqlSession.execute(bs);
         } catch (Exception e) {
+            log.error("Failed to write record with jobId: " + request.getJobId());
             throw new Exception("Failed to write job record");
         }
     }
@@ -80,6 +82,7 @@ public class JobDAOImp implements JobDAO{
 
             return Optional.ofNullable(jobDTO);
         } catch (Exception e) {
+            log.error("Failed to query record with jobId: " + jobId);
             throw new Exception("Failed to query job record");
         }
     }
@@ -95,6 +98,21 @@ public class JobDAOImp implements JobDAO{
             cqlSession.execute(bound);
         } catch (Exception e) {
             log.error("Failed to update record with jobId: " + jobId);
+            throw new Exception("Failed to update job record");
+        }
+    }
+
+    @Override
+    public void updateStatus(String jobId, Status status) throws Exception {
+        log.info("Updating link to object for record with id: " + jobId);
+
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+            PreparedStatement updateStatus = cqlSession.prepare(updateStatusStatement);
+            BoundStatement bound = updateStatus.bind(status, jobId);
+            cqlSession.execute(bound);
+        } catch (Exception e) {
+            log.error("Failed to update status of record with jobId: " + jobId);
             throw new Exception("Failed to update job record");
         }
     }
