@@ -15,7 +15,9 @@ import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
 
 import jakarta.inject.Inject;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 public class JobDAOImp implements JobDAO{
 
     private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, linkToObject, timeStamp, metadata) VALUES (?, ?, ?, ?, ?)";
@@ -23,66 +25,78 @@ public class JobDAOImp implements JobDAO{
     private static String updateLinkToObjectStatement = "UPDATE job_ks.jobs SET linkToObject = ? WHERE jobId = ?";
 
     private CassandraClient cassandraClient;
-    private final PreparedStatement insert;
-    private final PreparedStatement queryByJobId;
-    private final PreparedStatement updateLinkToObject;
     
     @Inject
     public JobDAOImp(CassandraClient cassandraClient) {
         this.cassandraClient = cassandraClient;
-        this.insert = cassandraClient.getSession().prepare(insertStatement);
-        this.queryByJobId = cassandraClient.getSession().prepare(queryByJobIdStatement);
-        this.updateLinkToObject = cassandraClient.getSession().prepare(updateLinkToObjectStatement);
     }
 
     @Override
-    public void createJob(JobRequest request) {
-        CqlSession cqlSession = cassandraClient.getSession();
-
+    public void createJob(JobRequest request) throws Exception {
+        log.info("Writing record with id: " + request.getJobId());
+        
         JobDTO jobDTO = JobDTO.builder()
             .jobId(request.getJobId())
             .objectLink(null)
             .status(Status.SUCCESS)
-            .timeStamp("test")
+            .timeStamp(request.getTimeStamp().toString())
             .metadata(null)
             .build();
 
-        BoundStatement bs = insert.bind(
-            jobDTO.getJobId(),
-            jobDTO.getStatus().toValue(),
-            jobDTO.getObjectLink(),
-            jobDTO.getTimeStamp(),
-            jobDTO.getMetadata());
-
-        cqlSession.execute(bs);
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+            PreparedStatement insert = cqlSession.prepare(insertStatement);
+            BoundStatement bs = insert.bind(
+                jobDTO.getJobId(),
+                jobDTO.getStatus().toValue(),
+                jobDTO.getObjectLink(),
+                jobDTO.getTimeStamp(),
+                jobDTO.getMetadata());
+            cqlSession.execute(bs);
+        } catch (Exception e) {
+            throw new Exception("Failed to write job record");
+        }
     }
 
     @Override
-    public Optional<JobDTO> findByJobId(String jobId) {
-        CqlSession cqlSession = cassandraClient.getSession();
-        
-        BoundStatement bound = queryByJobId.bind(jobId);
-        ResultSet rs = cqlSession.execute(bound);
+    public Optional<JobDTO> findByJobId(String jobId) throws Exception {
+        log.info("Querying record with id: " + jobId);
 
-        Row row = rs.one();
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+            PreparedStatement queryByJobId = cqlSession.prepare(queryByJobIdStatement);
+            BoundStatement bound = queryByJobId.bind(jobId);
 
-        JobDTO jobDTO = JobDTO.builder()
-            .jobId(row.getString("jobId"))
-            .objectLink(row.getString("linkToObject"))
-            .status(Status.fromValue(row.getString("status")))
-            .timeStamp(row.getString("timeStamp"))
-            .metadata(row.getMap("metadata", String.class, String.class))
-            .build();
+            ResultSet rs = cqlSession.execute(bound);
+            Row row = rs.one();
 
-        return Optional.ofNullable(jobDTO);
+            JobDTO jobDTO = JobDTO.builder()
+                .jobId(row.getString("jobId"))
+                .objectLink(row.getString("linkToObject"))
+                .status(Status.fromValue(row.getString("status")))
+                .timeStamp(row.getString("timeStamp"))
+                .metadata(row.getMap("metadata", String.class, String.class))
+                .build();
+
+            return Optional.ofNullable(jobDTO);
+        } catch (Exception e) {
+            throw new Exception("Failed to query job record");
+        }
     }
 
     @Override
-    public void updateLinkToObject(String jobId, String objectLink) {
-        CqlSession cqlSession = cassandraClient.getSession();
+    public void updateLinkToObject(String jobId, String objectLink) throws Exception {
+        log.info("Updating link to object for record with id: " + jobId);
 
-        BoundStatement bound = updateLinkToObject.bind(objectLink, jobId);
-        cqlSession.execute(bound);
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+            PreparedStatement updateLinkToObject = cqlSession.prepare(updateLinkToObjectStatement);
+            BoundStatement bound = updateLinkToObject.bind(objectLink, jobId);
+            cqlSession.execute(bound);
+        } catch (Exception e) {
+            log.error("Failed to update record with jobId: " + jobId);
+            throw new Exception("Failed to update job record");
+        }
     }
 
 
