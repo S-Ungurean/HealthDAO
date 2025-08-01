@@ -81,9 +81,14 @@ dependencies {
     implementation("com.datastax.oss:java-driver-core:4.17.0")
 }
 
+tasks.named<Jar>("jar") {
+    archiveBaseName.set("HealthDAO")
+}
+
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
 }
+
