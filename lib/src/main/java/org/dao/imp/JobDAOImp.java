@@ -22,7 +22,7 @@ public class JobDAOImp implements JobDAO{
 
     private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, linkToObject, timeStamp, metadata) VALUES (?, ?, ?, ?, ?)";
     private static String queryByJobIdStatement = "SELECT jobId, status, linkToObject, timeStamp, metadata FROM job_ks.jobs WHERE jobId = ?";
-    private static String updateLinkToObjectStatement = "UPDATE job_ks.jobs SET linkToObject = ? WHERE jobId = ?";
+    private static String updateLinkToObjectStatement = "UPDATE job_ks.jobs SET linkToObject = ?, status = ? WHERE jobId = ?";
     private static String updateStatusStatement = "UPDATE job_ks.jobs SET status = ? WHERE jobId = ?";
 
     private CassandraClient cassandraClient;
@@ -88,13 +88,13 @@ public class JobDAOImp implements JobDAO{
     }
 
     @Override
-    public void updateLinkToObject(String jobId, String objectLink) throws Exception {
+    public void updateLinkToObjectAndStatus(String jobId, String objectLink, Status status) throws Exception {
         log.info("Updating link to object for record with id: " + jobId);
 
         try {
             CqlSession cqlSession = cassandraClient.getSession();
             PreparedStatement updateLinkToObject = cqlSession.prepare(updateLinkToObjectStatement);
-            BoundStatement bound = updateLinkToObject.bind(objectLink, jobId);
+            BoundStatement bound = updateLinkToObject.bind(objectLink, status.toValue(), jobId);
             cqlSession.execute(bound);
         } catch (Exception e) {
             log.error("Failed to update record with jobId: " + jobId);

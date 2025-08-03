@@ -11,7 +11,7 @@ public interface JobDAO {
 
     Optional<JobDTO> findByJobId(String id) throws Exception;
 
-    void updateLinkToObject(String jobId, String objectLink) throws Exception;
+    void updateLinkToObjectAndStatus(String jobId, String objectLink, Status status) throws Exception;
 
     void updateStatus(String jobId, Status status) throws Exception;
 }
