@@ -54,7 +54,11 @@ repositories {
 
 dependencies {
     // Use JUnit test framework.
-    implementation("org.junit.jupiter:junit-jupiter-api:5.9.1")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
+
+    testImplementation("org.mockito:mockito-core:5.3.1")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.3.1")
 
     // This dependency is used by the application.
     implementation("com.google.guava:guava:31.1-jre")
