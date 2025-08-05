@@ -21,7 +21,6 @@ public class JobDTO {
 
     private String objectLink;
 
-    @NonNull
     private Status status;
 
     @NonNull

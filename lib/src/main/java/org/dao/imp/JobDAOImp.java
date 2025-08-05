@@ -38,18 +38,16 @@ public class JobDAOImp implements JobDAO{
         
         JobDTO jobDTO = JobDTO.builder()
             .jobId(request.getJobId())
-            .objectLink(null)
-            .status(Status.SUCCESS)
             .timeStamp(request.getTimeStamp().toString())
-            .metadata(null)
             .build();
 
         try {
             CqlSession cqlSession = cassandraClient.getSession();
             PreparedStatement insert = cqlSession.prepare(insertStatement);
+            jobDTO.getStatus();
             BoundStatement bs = insert.bind(
                 jobDTO.getJobId(),
-                jobDTO.getStatus().toValue(),
+                Status.safeToValue(null),
                 jobDTO.getObjectLink(),
                 jobDTO.getTimeStamp(),
                 jobDTO.getMetadata());
