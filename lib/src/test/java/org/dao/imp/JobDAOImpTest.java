@@ -1,9 +1,13 @@
 package org.dao.imp;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.NoNodeAvailableException;
 import com.datastax.oss.driver.api.core.cql.*;
-import org.dao.clients.CassandraClient;
+import com.datastax.oss.driver.api.core.servererrors.UnavailableException;
 
+import org.dao.clients.CassandraClient;
+import org.dao.exceptions.dDBReadFailedException;
+import org.dao.exceptions.dDBWriteFailedException;
 import org.dao.models.JobDTO;
 import org.dao.models.JobRequest;
 import org.dao.models.Status;
@@ -23,6 +27,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,13 +36,13 @@ public class JobDAOImpTest {
     private static final String JOB_ID = "1";
     private static final String REQUEST_ID = "1";
     private static final String LINK = "s3://STEFANUNGEREAN@HOTMAIL.COM";
-    private static final String TIMESTAMP = Instant.now().toString();
+    private static final Instant TIMESTAMP = Instant.now();
 
     @Mock
     private CassandraClient cassandraClient;
 
     @Mock
-    private CqlSession session;
+    private CqlSession cqlSession;
 
     @Mock
     private PreparedStatement preparedStatement;
@@ -52,111 +57,104 @@ public class JobDAOImpTest {
     private Row row;
 
     @InjectMocks
-    private JobDAOImp jobDAOImp;
+    private JobDAOImp jobDAO;
+
+    private JobRequest request;
 
     @BeforeEach
-    void setup() {
-        when(cassandraClient.getSession()).thenReturn(session);
-    }
-    
-    // Create Job
-    @Test
-    public void testCreateJob() throws Exception {
-        JobRequest request = JobRequest.builder()
+    void setUp() {
+        request = JobRequest.builder()
                 .jobId(JOB_ID)
+                .timeStamp(TIMESTAMP)
                 .requestId(REQUEST_ID)
-                .timeStamp(Instant.now())
                 .build();
-        
-        // Mocks for Cassandra
-        when(session.prepare(anyString())).thenReturn(preparedStatement);
+    }
+
+    // ----------- createJob ------------------
+    @Test
+    void createJob_success() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
         when(preparedStatement.bind(any(), any(), any(), any(), any())).thenReturn(boundStatement);
-        when(session.execute(boundStatement)).thenReturn(resultSet);
 
-        assertDoesNotThrow(() -> jobDAOImp.createJob(request));
-    }
-    
-    @Test
-    public void testCreateJob_throwsException() throws Exception {
-        JobRequest request = JobRequest.builder()
-                .jobId(JOB_ID)
-                .requestId(REQUEST_ID)
-                .timeStamp(Instant.now())
-                .build();
+        assertDoesNotThrow(() -> jobDAO.createJob(request));
 
-        when(session.prepare(anyString())).thenThrow(new RuntimeException("Cassandra prepare failed"));
-        Exception exception = assertThrows(Exception.class, () -> jobDAOImp.createJob(request));
-        assertEquals("Failed to write job record", exception.getMessage());
+        verify(cqlSession).execute(boundStatement);
     }
 
-    // Find By Job Id
     @Test
-    public void testFindByJobId() throws Exception {
-        when(session.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(JOB_ID)).thenReturn(boundStatement);
-        when(session.execute(boundStatement)).thenReturn(resultSet);
+    void createJob_failure() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
+
+        assertThrows(dDBWriteFailedException.class, () -> jobDAO.createJob(request));
+    }
+
+    // ----------- findByJobId ------------------
+    @Test
+    void findByJobId_success() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
         when(resultSet.one()).thenReturn(row);
 
-        when(row.getString("jobId")).thenReturn(JOB_ID);
-        when(row.getString("status")).thenReturn(Status.SUCCESS.toValue());
+        when(row.getString("jobId")).thenReturn("job123");
         when(row.getString("linkToObject")).thenReturn(LINK);
-        when(row.getString("timeStamp")).thenReturn(TIMESTAMP);
-        when(row.getMap("metadata", String.class, String.class)).thenReturn(Map.of());
+        when(row.getString("status")).thenReturn("INPROGRESS");
+        when(row.getString("timeStamp")).thenReturn("2023-01-01T00:00:00");
+        when(row.getMap(eq("metadata"), eq(String.class), eq(String.class)))
+                .thenReturn(Map.of("key", "value"));
 
-        Optional<JobDTO> result = jobDAOImp.findByJobId(JOB_ID);
+        Optional<JobDTO> result = jobDAO.findByJobId("job123");
 
         assertTrue(result.isPresent());
-        assertEquals(JOB_ID, result.get().getJobId());
-        assertEquals(Status.SUCCESS, result.get().getStatus());
+        assertEquals("job123", result.get().getJobId());
     }
 
     @Test
-    public void testFindByJobId_throwsException() throws Exception {
-        Exception exception = assertThrows(Exception.class, () -> jobDAOImp.findByJobId(JOB_ID));
-        assertEquals("Failed to query job record", exception.getMessage());
+    void findByJobId_failure() {
+        when(cassandraClient.getSession()).thenThrow(new UnavailableException(null, null, 0, 0));
+
+        assertThrows(dDBReadFailedException.class, () -> jobDAO.findByJobId("job123"));
     }
 
-    // Update Link To Object And Status
+    // ----------- updateLinkToObjectAndStatus ------------------
     @Test
-    public void testUpdateLinkToObjectAndStatus() throws Exception {
-        when(session.prepare(anyString())).thenReturn(preparedStatement);
+    void updateLinkToObjectAndStatus_success() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
         when(preparedStatement.bind(any(), any(), any())).thenReturn(boundStatement);
-        when(session.execute(boundStatement)).thenReturn(resultSet);
 
-        assertDoesNotThrow(() -> jobDAOImp.updateLinkToObjectAndStatus(JOB_ID, LINK, Status.SUCCESS));
+        assertDoesNotThrow(() -> jobDAO.updateLinkToObjectAndStatus("job123", "link", Status.INPROGRESS));
+
+        verify(cqlSession).execute(boundStatement);
     }
 
     @Test
-    public void testUpdateLinkToObjectAndStatus_throwsException() throws Exception {
-        when(session.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(any(), any(), any())).thenReturn(boundStatement);
-        when(session.execute(boundStatement)).thenThrow(new RuntimeException("Write error"));
+    void updateLinkToObjectAndStatus_failure() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
 
-        Exception exception = assertThrows(Exception.class, () ->
-            jobDAOImp.updateLinkToObjectAndStatus(JOB_ID, LINK, Status.SUCCESS));
-
-        assertEquals("Failed to update job record", exception.getMessage());
+        assertThrows(dDBWriteFailedException.class,
+                () -> jobDAO.updateLinkToObjectAndStatus("job123", "link", Status.INPROGRESS));
     }
 
-    // Update Status
+    // ----------- updateStatus ------------------
     @Test
-    public void testUpdateStatus() throws Exception {
-        when(session.prepare(anyString())).thenReturn(preparedStatement);
+    void updateStatus_success() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
         when(preparedStatement.bind(any(), any())).thenReturn(boundStatement);
-        when(session.execute(boundStatement)).thenReturn(resultSet);
 
-        assertDoesNotThrow(() -> jobDAOImp.updateStatus(JOB_ID, Status.SUCCESS));
+        assertDoesNotThrow(() -> jobDAO.updateStatus("job123", Status.SUCCESS));
+
+        verify(cqlSession).execute(boundStatement);
     }
 
     @Test
-    public void testUpdateStatus_throwsException() throws Exception {
-        when(session.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(any(), any())).thenReturn(boundStatement);
-        when(session.execute(boundStatement)).thenThrow(new RuntimeException("Update error"));
+    void updateStatus_failure() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
 
-        Exception exception = assertThrows(Exception.class, () ->
-            jobDAOImp.updateStatus(JOB_ID, Status.SUCCESS));
-
-        assertEquals("Failed to update job record", exception.getMessage());
+        assertThrows(dDBWriteFailedException.class,
+                () -> jobDAO.updateStatus("job123", Status.SUCCESS));
     }
 }

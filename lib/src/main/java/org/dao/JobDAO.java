@@ -7,11 +7,11 @@ import org.dao.models.JobRequest;
 import org.dao.models.Status;
 
 public interface JobDAO {
-    void createJob(JobRequest request) throws Exception;
+    void createJob(JobRequest request);
 
-    Optional<JobDTO> findByJobId(String id) throws Exception;
+    Optional<JobDTO> findByJobId(String id);
 
-    void updateLinkToObjectAndStatus(String jobId, String objectLink, Status status) throws Exception;
+    void updateLinkToObjectAndStatus(String jobId, String objectLink, Status status);
 
-    void updateStatus(String jobId, Status status) throws Exception;
+    void updateStatus(String jobId, Status status);
 }

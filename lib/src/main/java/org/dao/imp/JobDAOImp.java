@@ -4,21 +4,29 @@ import java.util.Optional;
 
 import org.dao.JobDAO;
 import org.dao.clients.CassandraClient;
+import org.dao.exceptions.dDBReadFailedException;
+import org.dao.exceptions.dDBWriteFailedException;
 import org.dao.models.JobDTO;
 import org.dao.models.JobRequest;
 import org.dao.models.Status;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.DriverException;
+import com.datastax.oss.driver.api.core.NoNodeAvailableException;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.servererrors.QueryValidationException;
+import com.datastax.oss.driver.api.core.servererrors.ReadTimeoutException;
+import com.datastax.oss.driver.api.core.servererrors.UnavailableException;
+import com.datastax.oss.driver.api.core.servererrors.WriteTimeoutException;
 
 import jakarta.inject.Inject;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class JobDAOImp implements JobDAO{
+public class JobDAOImp implements JobDAO {
 
     private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, linkToObject, timeStamp, metadata) VALUES (?, ?, ?, ?, ?)";
     private static String queryByJobIdStatement = "SELECT jobId, status, linkToObject, timeStamp, metadata FROM job_ks.jobs WHERE jobId = ?";
@@ -33,14 +41,14 @@ public class JobDAOImp implements JobDAO{
     }
 
     @Override
-    public void createJob(JobRequest request) throws Exception {
+    public void createJob(JobRequest request) {
         log.info("Writing record with id: " + request.getJobId());
         
         JobDTO jobDTO = JobDTO.builder()
             .jobId(request.getJobId())
             .timeStamp(request.getTimeStamp().toString())
             .build();
-
+        
         try {
             CqlSession cqlSession = cassandraClient.getSession();
             PreparedStatement insert = cqlSession.prepare(insertStatement);
@@ -52,14 +60,23 @@ public class JobDAOImp implements JobDAO{
                 jobDTO.getTimeStamp(),
                 jobDTO.getMetadata());
             cqlSession.execute(bs);
-        } catch (Exception e) {
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
             log.error("Failed to write record with jobId: " + request.getJobId());
-            throw new Exception("Failed to write job record");
+            throw new dDBWriteFailedException("Failed to write job record");
+        } catch (QueryValidationException e) {
+            log.error("Failed to write record with jobId: " + request.getJobId());
+            throw new dDBWriteFailedException("Failed to write job record");
+        } catch (DriverException e) {
+            log.error("Failed to write record with jobId: " + request.getJobId());
+            throw new dDBWriteFailedException("Failed to write job record");
+        } catch (NullPointerException e) {
+            log.error("Failed to write record with jobId: " + request.getJobId());
+            throw new dDBWriteFailedException("Failed to write job record");
         }
     }
 
     @Override
-    public Optional<JobDTO> findByJobId(String jobId) throws Exception {
+    public Optional<JobDTO> findByJobId(String jobId) {
         log.info("Querying record with id: " + jobId);
 
         try {
@@ -79,14 +96,23 @@ public class JobDAOImp implements JobDAO{
                 .build();
 
             return Optional.ofNullable(jobDTO);
-        } catch (Exception e) {
-            log.error("Failed to query record with jobId: " + jobId);
-            throw new Exception("Failed to query job record");
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Cluster availability issue while writing jobId {}", jobId, e);
+            throw new dDBReadFailedException("Cluster unavailable for job write", e);
+        } catch (QueryValidationException e) {
+            log.error("Invalid query for jobId {}: {}", jobId, e.getMessage(), e);
+            throw new dDBReadFailedException("Invalid query for job write", e);
+        } catch (DriverException e) {
+            log.error("Unexpected Cassandra driver error for jobId {}", jobId, e);
+            throw new dDBReadFailedException("Unexpected Cassandra error", e);
+        } catch (NullPointerException e) {
+            log.error("Failed to read record with jobId: " + jobId);
+            throw new dDBReadFailedException("Failed to read job record");
         }
     }
 
     @Override
-    public void updateLinkToObjectAndStatus(String jobId, String objectLink, Status status) throws Exception {
+    public void updateLinkToObjectAndStatus(String jobId, String objectLink, Status status) {
         log.info("Updating link to object for record with id: " + jobId);
 
         try {
@@ -94,14 +120,23 @@ public class JobDAOImp implements JobDAO{
             PreparedStatement updateLinkToObject = cqlSession.prepare(updateLinkToObjectStatement);
             BoundStatement bound = updateLinkToObject.bind(objectLink, status.toValue(), jobId);
             cqlSession.execute(bound);
-        } catch (Exception e) {
-            log.error("Failed to update record with jobId: " + jobId);
-            throw new Exception("Failed to update job record");
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Cluster availability issue while writing jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Cluster unavailable for job write", e);
+        } catch (QueryValidationException e) {
+            log.error("Invalid query for jobId {}: {}", jobId, e.getMessage(), e);
+            throw new dDBWriteFailedException("Invalid query for job write", e);
+        } catch (DriverException e) {
+            log.error("Unexpected Cassandra driver error for jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Unexpected Cassandra error", e);
+        } catch (NullPointerException e) {
+            log.error("Failed to write record with jobId: " + jobId);
+            throw new dDBWriteFailedException("Failed to write job record");
         }
     }
 
     @Override
-    public void updateStatus(String jobId, Status status) throws Exception {
+    public void updateStatus(String jobId, Status status) {
         log.info("Updating link to object for record with id: " + jobId);
 
         try {
@@ -109,11 +144,18 @@ public class JobDAOImp implements JobDAO{
             PreparedStatement updateStatus = cqlSession.prepare(updateStatusStatement);
             BoundStatement bound = updateStatus.bind(status.toValue(), jobId);
             cqlSession.execute(bound);
-        } catch (Exception e) {
-            log.error("Failed to update status of record with jobId: " + jobId);
-            throw new Exception("Failed to update job record");
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Cluster availability issue while writing jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Cluster unavailable for job write", e);
+        } catch (QueryValidationException e) {
+            log.error("Invalid query for jobId {}: {}", jobId, e.getMessage(), e);
+            throw new dDBWriteFailedException("Invalid query for job write", e);
+        } catch (DriverException e) {
+            log.error("Unexpected Cassandra driver error for jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Unexpected Cassandra error", e);
+        } catch (NullPointerException e) {
+            log.error("Failed to write record with jobId: " + jobId);
+            throw new dDBWriteFailedException("Failed to write job record");
         }
     }
-
-
 }
