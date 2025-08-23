@@ -8,8 +8,9 @@ public class CassandraClient {
 
     private static String keySpace = "job_ks";
     private static String dataCenter = "datacenter1";
-    private static String localHost = "localhost";
-    private static int defaultCassandraPort = 9042;
+
+    private static String cassandraHost = System.getenv().getOrDefault("CASSANDRA_HOST", "localhost");
+    private static String cassandraPort = System.getenv().getOrDefault("CASSANDRA_PORT", "9042");
 
     private CqlSession session;
 
@@ -18,7 +19,7 @@ public class CassandraClient {
             try {
                 session = CqlSession.builder()
                     .withKeyspace(keySpace)
-                    .addContactPoint(new InetSocketAddress(localHost, defaultCassandraPort))
+                    .addContactPoint(new InetSocketAddress(cassandraHost, Integer.parseInt(cassandraPort)))
                     .withLocalDatacenter(dataCenter)
                     .build();
             } catch (Exception e) {
