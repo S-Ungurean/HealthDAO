@@ -28,9 +28,10 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class JobDAOImp implements JobDAO {
 
-    private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, linkToObject, timeStamp, metadata) VALUES (?, ?, ?, ?, ?)";
-    private static String queryByJobIdStatement = "SELECT jobId, status, linkToObject, timeStamp, metadata FROM job_ks.jobs WHERE jobId = ?";
-    private static String updateLinkToObjectStatement = "UPDATE job_ks.jobs SET linkToObject = ?, status = ? WHERE jobId = ?";
+    private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata) VALUES (?, ?, ?, ?, ?)";
+    private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata FROM job_ks.jobs WHERE jobId = ?";
+    private static String updateResultObjectKeyStatement = "UPDATE job_ks.jobs SET resultObjectKey = ?, status = ? WHERE jobId = ?";
+    private static String updateInputObjectKeyStatement = "UPDATE job_ks.jobs SET inputObjectKey = ? WHERE jobId = ?";
     private static String updateStatusStatement = "UPDATE job_ks.jobs SET status = ? WHERE jobId = ?";
 
     private CassandraClient cassandraClient;
@@ -55,8 +56,9 @@ public class JobDAOImp implements JobDAO {
             jobDTO.getStatus();
             BoundStatement bs = insert.bind(
                 jobDTO.getJobId(),
-                Status.safeToValue(null),
-                jobDTO.getObjectLink(),
+                Status.safeToValue(Status.INPROGRESS),
+                jobDTO.getInputObjectKey(),
+                jobDTO.getResultObjectKey(),
                 jobDTO.getTimeStamp(),
                 jobDTO.getMetadata());
             cqlSession.execute(bs);
@@ -89,7 +91,8 @@ public class JobDAOImp implements JobDAO {
 
             JobDTO jobDTO = JobDTO.builder()
                 .jobId(row.getString("jobId"))
-                .objectLink(row.getString("linkToObject"))
+                .resultObjectKey(row.getString("resultObjectKey"))
+                .inputObjectKey(row.getString("inputObjectKey"))
                 .status(Status.fromValue(row.getString("status")))
                 .timeStamp(row.getString("timeStamp"))
                 .metadata(row.getMap("metadata", String.class, String.class))
@@ -112,13 +115,37 @@ public class JobDAOImp implements JobDAO {
     }
 
     @Override
-    public void updateLinkToObjectAndStatus(String jobId, String objectLink, Status status) {
-        log.info("Updating link to object for record with id: " + jobId);
+    public void updateResultObjectKeyAndStatus(String jobId, String objectKey, Status status) {
+        log.info("Updating result object key for record with id: " + jobId);
 
         try {
             CqlSession cqlSession = cassandraClient.getSession();
-            PreparedStatement updateLinkToObject = cqlSession.prepare(updateLinkToObjectStatement);
-            BoundStatement bound = updateLinkToObject.bind(objectLink, status.toValue(), jobId);
+            PreparedStatement updateResultObjectKey = cqlSession.prepare(updateResultObjectKeyStatement);
+            BoundStatement bound = updateResultObjectKey.bind(objectKey, status.toValue(), jobId);
+            cqlSession.execute(bound);
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Cluster availability issue while writing jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Cluster unavailable for job write", e);
+        } catch (QueryValidationException e) {
+            log.error("Invalid query for jobId {}: {}", jobId, e.getMessage(), e);
+            throw new dDBWriteFailedException("Invalid query for job write", e);
+        } catch (DriverException e) {
+            log.error("Unexpected Cassandra driver error for jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Unexpected Cassandra error", e);
+        } catch (NullPointerException e) {
+            log.error("Failed to write record with jobId: " + jobId);
+            throw new dDBWriteFailedException("Failed to write job record");
+        }
+    }
+
+    @Override
+    public void updateInputObjectKey(String jobId, String objectKey) {
+        log.info("Updating input object key for record with id: " + jobId);
+
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+            PreparedStatement updateInputObjectKey = cqlSession.prepare(updateInputObjectKeyStatement);
+            BoundStatement bound = updateInputObjectKey.bind(objectKey, jobId);
             cqlSession.execute(bound);
         } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
             log.error("Cluster availability issue while writing jobId {}", jobId, e);
@@ -137,7 +164,7 @@ public class JobDAOImp implements JobDAO {
 
     @Override
     public void updateStatus(String jobId, Status status) {
-        log.info("Updating link to object for record with id: " + jobId);
+        log.info("Updating status for record with id: " + jobId);
 
         try {
             CqlSession cqlSession = cassandraClient.getSession();

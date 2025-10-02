@@ -28,7 +28,8 @@ public class JobDTOTest {
     void testBuilderCreatesObject() {
         JobDTO jobDTO = JobDTO.builder()
             .jobId(jobId)
-            .objectLink(objectLink)
+            .resultObjectKey(objectLink)
+            .inputObjectKey(objectLink)
             .status(status)
             .timeStamp(timeStamp)
             .metadata(metadata)
@@ -36,7 +37,8 @@ public class JobDTOTest {
 
         assertNotNull(jobDTO);
         assertEquals(jobId, jobDTO.getJobId());
-        assertEquals(objectLink, jobDTO.getObjectLink());
+        assertEquals(objectLink, jobDTO.getResultObjectKey());
+        assertEquals(objectLink, jobDTO.getInputObjectKey());
         assertEquals(status, jobDTO.getStatus());
         assertEquals(timeStamp, jobDTO.getTimeStamp());
         assertEquals(metadata, jobDTO.getMetadata());
@@ -46,13 +48,15 @@ public class JobDTOTest {
     void testSetterAndGetter() {
         JobDTO jobDTO = new JobDTO();
         jobDTO.setJobId(jobId);
-        jobDTO.setObjectLink(objectLink);
+        jobDTO.setResultObjectKey(objectLink);
+        jobDTO.setInputObjectKey(objectLink);
         jobDTO.setStatus(status);
         jobDTO.setTimeStamp(timeStamp);
         jobDTO.setMetadata(metadata);
 
         assertEquals(jobId, jobDTO.getJobId());
-        assertEquals(objectLink, jobDTO.getObjectLink());
+        assertEquals(objectLink, jobDTO.getResultObjectKey());
+        assertEquals(objectLink, jobDTO.getInputObjectKey());
         assertEquals(status, jobDTO.getStatus());
         assertEquals(timeStamp, jobDTO.getTimeStamp());
         assertEquals(metadata, jobDTO.getMetadata()); 
@@ -63,7 +67,8 @@ public class JobDTOTest {
         assertThrows(NullPointerException.class, () -> {
             JobDTO.builder()
                 .jobId(null)
-                .objectLink(null)
+                .resultObjectKey(null)
+                .inputObjectKey(null)
                 .status(null)
                 .timeStamp(null)
                 .build();

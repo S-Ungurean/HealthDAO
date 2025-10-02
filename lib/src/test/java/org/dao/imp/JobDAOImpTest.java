@@ -75,7 +75,7 @@ public class JobDAOImpTest {
     void createJob_success() {
         when(cassandraClient.getSession()).thenReturn(cqlSession);
         when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(any(), any(), any(), any(), any())).thenReturn(boundStatement);
+        when(preparedStatement.bind(any(), any(), any(), any(), any(), any())).thenReturn(boundStatement);
 
         assertDoesNotThrow(() -> jobDAO.createJob(request));
 
@@ -99,7 +99,8 @@ public class JobDAOImpTest {
         when(resultSet.one()).thenReturn(row);
 
         when(row.getString("jobId")).thenReturn("job123");
-        when(row.getString("linkToObject")).thenReturn(LINK);
+        when(row.getString("resultObjectKey")).thenReturn(LINK);
+        when(row.getString("inputObjectKey")).thenReturn(LINK);
         when(row.getString("status")).thenReturn("INPROGRESS");
         when(row.getString("timeStamp")).thenReturn("2023-01-01T00:00:00");
         when(row.getMap(eq("metadata"), eq(String.class), eq(String.class)))
@@ -125,7 +126,7 @@ public class JobDAOImpTest {
         when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
         when(preparedStatement.bind(any(), any(), any())).thenReturn(boundStatement);
 
-        assertDoesNotThrow(() -> jobDAO.updateLinkToObjectAndStatus("job123", "link", Status.INPROGRESS));
+        assertDoesNotThrow(() -> jobDAO.updateResultObjectKeyAndStatus("job123", "link", Status.INPROGRESS));
 
         verify(cqlSession).execute(boundStatement);
     }
@@ -135,7 +136,7 @@ public class JobDAOImpTest {
         when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
 
         assertThrows(dDBWriteFailedException.class,
-                () -> jobDAO.updateLinkToObjectAndStatus("job123", "link", Status.INPROGRESS));
+                () -> jobDAO.updateResultObjectKeyAndStatus("job123", "link", Status.INPROGRESS));
     }
 
     // ----------- updateStatus ------------------
@@ -156,5 +157,24 @@ public class JobDAOImpTest {
 
         assertThrows(dDBWriteFailedException.class,
                 () -> jobDAO.updateStatus("job123", Status.SUCCESS));
+    }
+
+    @Test
+    void updateInputObjectKey_success() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any(), any())).thenReturn(boundStatement);
+
+        assertDoesNotThrow(() -> jobDAO.updateInputObjectKey("job123", "link"));
+
+        verify(cqlSession).execute(boundStatement);
+    }
+
+    @Test
+    void updateInputObjectKey_failure() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
+
+        assertThrows(dDBWriteFailedException.class,
+                () -> jobDAO.updateInputObjectKey("job123", "link"));
     }
 }

@@ -19,7 +19,9 @@ public class JobDTO {
     @NonNull
     private String jobId;
 
-    private String objectLink;
+    private String resultObjectKey;
+
+    private String inputObjectKey;
 
     private Status status;
 
