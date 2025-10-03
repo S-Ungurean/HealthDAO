@@ -28,7 +28,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class JobDAOImp implements JobDAO {
 
-    private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata) VALUES (?, ?, ?, ?, ?)";
+    private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata) VALUES (?, ?, ?, ?, ?, ?)";
     private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata FROM job_ks.jobs WHERE jobId = ?";
     private static String updateResultObjectKeyStatement = "UPDATE job_ks.jobs SET resultObjectKey = ?, status = ? WHERE jobId = ?";
     private static String updateInputObjectKeyStatement = "UPDATE job_ks.jobs SET inputObjectKey = ? WHERE jobId = ?";
