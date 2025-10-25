@@ -30,4 +30,6 @@ public class JobDTO {
 
     private Map<String, String> metadata;
 
+    private String modelResults;
+
 }

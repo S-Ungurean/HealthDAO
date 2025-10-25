@@ -30,7 +30,7 @@ public class JobDAOImp implements JobDAO {
 
     private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata) VALUES (?, ?, ?, ?, ?, ?)";
     private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata FROM job_ks.jobs WHERE jobId = ?";
-    private static String updateResultObjectKeyStatement = "UPDATE job_ks.jobs SET resultObjectKey = ?, status = ? WHERE jobId = ?";
+    private static String updateResultObjectKeyAndStatusAndModelResultsStatement = "UPDATE job_ks.jobs SET resultObjectKey = ?, status = ?, modelResults = ? WHERE jobId = ?";
     private static String updateInputObjectKeyStatement = "UPDATE job_ks.jobs SET inputObjectKey = ? WHERE jobId = ?";
     private static String updateStatusStatement = "UPDATE job_ks.jobs SET status = ? WHERE jobId = ?";
 
@@ -115,13 +115,13 @@ public class JobDAOImp implements JobDAO {
     }
 
     @Override
-    public void updateResultObjectKeyAndStatus(String jobId, String objectKey, Status status) {
+    public void updateResultObjectKeyAndStatusAndModelResults(String jobId, String objectKey, Status status, String modelResults) {
         log.info("Updating result object key for record with id: " + jobId);
 
         try {
             CqlSession cqlSession = cassandraClient.getSession();
-            PreparedStatement updateResultObjectKey = cqlSession.prepare(updateResultObjectKeyStatement);
-            BoundStatement bound = updateResultObjectKey.bind(objectKey, status.toValue(), jobId);
+            PreparedStatement updateResultObjectKey = cqlSession.prepare(updateResultObjectKeyAndStatusAndModelResultsStatement);
+            BoundStatement bound = updateResultObjectKey.bind(objectKey, status.toValue(), modelResults, jobId);
             cqlSession.execute(bound);
         } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
             log.error("Cluster availability issue while writing jobId {}", jobId, e);

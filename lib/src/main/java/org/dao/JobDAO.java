@@ -11,7 +11,7 @@ public interface JobDAO {
 
     Optional<JobDTO> findByJobId(String id);
 
-    void updateResultObjectKeyAndStatus(String jobId, String objectKey, Status status);
+    void updateResultObjectKeyAndStatusAndModelResults(String jobId, String objectKey, Status status, String modelResults);
 
     void updateInputObjectKey(String jobId, String objectKey);
 
