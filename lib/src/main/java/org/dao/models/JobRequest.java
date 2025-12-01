@@ -23,4 +23,7 @@ public class JobRequest {
 
     @NonNull
     private String requestId;
+
+    @NonNull
+    private String fileHash;
 }

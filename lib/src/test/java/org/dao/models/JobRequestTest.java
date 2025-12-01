@@ -16,6 +16,7 @@ public class JobRequestTest {
                                           .jobId("1")
                                           .requestId("1")
                                           .timeStamp(Instant.now())
+                                          .fileHash("1")
                                           .build();
 
         assertNotNull(jobRequest);

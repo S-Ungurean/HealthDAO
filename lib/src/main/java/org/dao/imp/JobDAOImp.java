@@ -28,17 +28,27 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class JobDAOImp implements JobDAO {
 
-    private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata) VALUES (?, ?, ?, ?, ?, ?)";
-    private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, modelResults, metadata FROM job_ks.jobs WHERE jobId = ?";
+    private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata, fileHash) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, modelResults, metadata, fileHash FROM job_ks.jobs WHERE jobId = ?";
     private static String updateResultObjectKeyAndStatusAndModelResultsStatement = "UPDATE job_ks.jobs SET resultObjectKey = ?, status = ?, modelResults = ? WHERE jobId = ?";
     private static String updateInputObjectKeyStatement = "UPDATE job_ks.jobs SET inputObjectKey = ? WHERE jobId = ?";
     private static String updateStatusStatement = "UPDATE job_ks.jobs SET status = ? WHERE jobId = ?";
+    private static String checkFileHashStatement = "SELECT jobId FROM job_ks.jobs WHERE fileHash = ? LIMIT 1";
+
+    private PreparedStatement psCheckFileHash;
 
     private CassandraClient cassandraClient;
     
     @Inject
     public JobDAOImp(CassandraClient cassandraClient) {
         this.cassandraClient = cassandraClient;
+    }
+
+    private PreparedStatement getCheckFileHashStatement(CqlSession session) {
+        if (psCheckFileHash == null) {
+            psCheckFileHash = session.prepare(checkFileHashStatement);
+        }
+        return psCheckFileHash;
     }
 
     @Override
@@ -48,6 +58,7 @@ public class JobDAOImp implements JobDAO {
         JobDTO jobDTO = JobDTO.builder()
             .jobId(request.getJobId())
             .timeStamp(request.getTimeStamp().toString())
+            .fileHash(request.getFileHash())
             .build();
         
         try {
@@ -57,10 +68,11 @@ public class JobDAOImp implements JobDAO {
             BoundStatement bs = insert.bind(
                 jobDTO.getJobId(),
                 Status.safeToValue(Status.INPROGRESS),
-                jobDTO.getInputObjectKey(),
                 jobDTO.getResultObjectKey(),
+                jobDTO.getInputObjectKey(),
                 jobDTO.getTimeStamp(),
-                jobDTO.getMetadata());
+                jobDTO.getMetadata(),
+                jobDTO.getFileHash());
             cqlSession.execute(bs);
         } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
             log.error("Failed to write record with jobId: " + request.getJobId());
@@ -97,6 +109,7 @@ public class JobDAOImp implements JobDAO {
                 .timeStamp(row.getString("timeStamp"))
                 .metadata(row.getMap("metadata", String.class, String.class))
                 .modelResults(row.getString("modelResults"))
+                .fileHash(row.getString("fileHash"))
                 .build();
 
             return Optional.ofNullable(jobDTO);
@@ -184,6 +197,33 @@ public class JobDAOImp implements JobDAO {
         } catch (NullPointerException e) {
             log.error("Failed to write record with jobId: " + jobId);
             throw new dDBWriteFailedException("Failed to write job record");
+        }
+    }
+
+    @Override
+    public boolean hasFileHash(String fileHash) {
+        log.debug("Checking existence of fileHash: " + fileHash);
+
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+
+            PreparedStatement statement = getCheckFileHashStatement(cqlSession);
+            BoundStatement bound = statement.bind(fileHash);
+
+            ResultSet rs = cqlSession.execute(bound);
+            
+            // rs.one() returns the first row or null if empty. 
+            return rs.one() != null;
+
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Cluster availability issue while checking fileHash {}", fileHash, e);
+            throw new dDBReadFailedException("Cluster unavailable for fileHash check", e);
+        } catch (QueryValidationException e) {
+            log.error("Invalid query for fileHash {}: {}. Did you create the INDEX?", fileHash, e.getMessage(), e);
+            throw new dDBReadFailedException("Invalid query (Missing Index?)", e);
+        } catch (DriverException e) {
+            log.error("Unexpected Cassandra driver error for fileHash {}", fileHash, e);
+            throw new dDBReadFailedException("Unexpected Cassandra error", e);
         }
     }
 }

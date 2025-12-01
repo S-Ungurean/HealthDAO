@@ -16,4 +16,6 @@ public interface JobDAO {
     void updateInputObjectKey(String jobId, String objectKey);
 
     void updateStatus(String jobId, Status status);
+
+    boolean hasFileHash(String fileHash);
 }

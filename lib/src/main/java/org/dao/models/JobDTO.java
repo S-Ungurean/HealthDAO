@@ -32,4 +32,6 @@ public class JobDTO {
 
     private String modelResults;
 
+    private String fileHash;
+
 }

@@ -37,6 +37,7 @@ public class JobDAOImpTest {
     private static final String REQUEST_ID = "1";
     private static final String LINK = "s3://STEFANUNGEREAN@HOTMAIL.COM";
     private static final Instant TIMESTAMP = Instant.now();
+    private static final String FILE_HASH = "1";
 
     @Mock
     private CassandraClient cassandraClient;
@@ -67,6 +68,7 @@ public class JobDAOImpTest {
                 .jobId(JOB_ID)
                 .timeStamp(TIMESTAMP)
                 .requestId(REQUEST_ID)
+                .fileHash(FILE_HASH)
                 .build();
     }
 
@@ -75,7 +77,7 @@ public class JobDAOImpTest {
     void createJob_success() {
         when(cassandraClient.getSession()).thenReturn(cqlSession);
         when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(any(), any(), any(), any(), any(), any())).thenReturn(boundStatement);
+        when(preparedStatement.bind(any(), any(), any(), any(), any(), any(), any())).thenReturn(boundStatement);
 
         assertDoesNotThrow(() -> jobDAO.createJob(request));
 
@@ -176,5 +178,61 @@ public class JobDAOImpTest {
 
         assertThrows(dDBWriteFailedException.class,
                 () -> jobDAO.updateInputObjectKey("job123", "link"));
+    }
+
+    // ----------- hasFileHash ------------------
+    @Test
+    void hasFileHash_exists() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
+
+        when(resultSet.one()).thenReturn(row);
+
+        boolean result = jobDAO.hasFileHash("abc123");
+
+        assertTrue(result);
+        verify(cassandraClient).getSession();
+        verify(cqlSession).execute(boundStatement);
+    }
+
+    @Test
+    void hasFileHash_notExists() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
+
+        when(resultSet.one()).thenReturn(null);
+
+        boolean result = jobDAO.hasFileHash("abc123");
+
+        assertFalse(result);
+    }
+
+    @Test
+    void hasFileHash_failure_throwsReadException() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
+
+        assertThrows(dDBReadFailedException.class,
+                () -> jobDAO.hasFileHash("abc123"));
+    }
+
+    @Test
+    void hasFileHash_reusesPreparedStatement() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement))
+                .thenReturn(resultSet);
+
+        when(resultSet.one()).thenReturn(row);
+        jobDAO.hasFileHash("hash1");
+
+        when(resultSet.one()).thenReturn(null);
+        jobDAO.hasFileHash("hash2");
+
+        verify(cqlSession, times(1)).prepare(anyString());
     }
 }
