@@ -25,7 +25,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class FeedbackDAOImp implements FeedbackDAO {
 
-    private static String insertStatement = "INSERT INTO job_ks.feedback (feedbackId, jobId, correctness, starRating, comments, timeStamp) VALUES (?, ?, ?, ?, ?, ?)";
+    private static String insertStatement = "INSERT INTO job_ks.feedback (feedbackId, jobId, starRating, comments, timeStamp) VALUES (?, ?, ?, ?, ?)";
 
     private CassandraClient cassandraClient;
 
@@ -41,7 +41,6 @@ public class FeedbackDAOImp implements FeedbackDAO {
         FeedbackDTO feedbackDTO = FeedbackDTO.builder()
             .feedbackId(UUID.randomUUID().toString())
             .jobId(request.getJobId())
-            .correctness(request.getCorrectness())
             .starRating(request.getStarRating())
             .comments(request.getComments())
             .timeStamp(Instant.now().toString())
@@ -53,7 +52,6 @@ public class FeedbackDAOImp implements FeedbackDAO {
             BoundStatement bs = insert.bind(
                 feedbackDTO.getFeedbackId(),
                 feedbackDTO.getJobId(),
-                feedbackDTO.getCorrectness(),
                 feedbackDTO.getStarRating(),
                 feedbackDTO.getComments(),
                 feedbackDTO.getTimeStamp());

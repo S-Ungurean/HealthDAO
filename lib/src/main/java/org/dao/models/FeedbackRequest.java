@@ -17,9 +17,6 @@ public class FeedbackRequest {
     @NonNull
     private String jobId;
 
-    @NonNull
-    private String correctness;
-
     private int starRating;
 
     private String comments;

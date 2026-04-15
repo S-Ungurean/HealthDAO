@@ -20,8 +20,6 @@ public class FeedbackDTO {
     @NonNull
     private String jobId;
 
-    private String correctness;
-
     private int starRating;
 
     private String comments;

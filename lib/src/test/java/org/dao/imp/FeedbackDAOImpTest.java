@@ -46,7 +46,6 @@ public class FeedbackDAOImpTest {
     void setUp() {
         request = FeedbackRequest.builder()
                 .jobId("job-123")
-                .correctness("CORRECT")
                 .starRating(4)
                 .comments("Good analysis")
                 .build();
@@ -56,7 +55,7 @@ public class FeedbackDAOImpTest {
     void submitFeedback_success() {
         when(cassandraClient.getSession()).thenReturn(cqlSession);
         when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(any(), any(), any(), any(), any(), any())).thenReturn(boundStatement);
+        when(preparedStatement.bind(any(), any(), any(), any(), any())).thenReturn(boundStatement);
 
         assertDoesNotThrow(() -> feedbackDAO.submitFeedback(request));
 
@@ -88,13 +87,12 @@ public class FeedbackDAOImpTest {
     void submitFeedback_withNullComments_success() {
         FeedbackRequest noComments = FeedbackRequest.builder()
                 .jobId("job-456")
-                .correctness("PARTIAL")
                 .starRating(3)
                 .build();
 
         when(cassandraClient.getSession()).thenReturn(cqlSession);
         when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(any(), any(), any(), any(), any(), any())).thenReturn(boundStatement);
+        when(preparedStatement.bind(any(), any(), any(), any(), any())).thenReturn(boundStatement);
 
         assertDoesNotThrow(() -> feedbackDAO.submitFeedback(noComments));
 
