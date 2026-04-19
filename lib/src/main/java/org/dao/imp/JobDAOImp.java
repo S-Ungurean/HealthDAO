@@ -101,6 +101,10 @@ public class JobDAOImp implements JobDAO {
             ResultSet rs = cqlSession.execute(bound);
             Row row = rs.one();
 
+            if (row == null) {
+                return Optional.empty();
+            }
+
             JobDTO jobDTO = JobDTO.builder()
                 .jobId(row.getString("jobId"))
                 .resultObjectKey(row.getString("resultObjectKey"))
