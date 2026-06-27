@@ -235,4 +235,32 @@ public class JobDAOImpTest {
 
         verify(cqlSession, times(1)).prepare(anyString());
     }
+
+    // ----------- updateMetadata ------------------
+
+    @Test
+    void updateMetadata_success() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any(), any())).thenReturn(boundStatement);
+
+        Map<String, String> metadata = Map.of(
+                "survey_age_group", "adult",
+                "survey_energy_level", "normal_active",
+                "calculated_triage_tier", "LOW"
+        );
+
+        assertDoesNotThrow(() -> jobDAO.updateMetadata(JOB_ID, metadata));
+
+        verify(cqlSession).execute(boundStatement);
+    }
+
+    @Test
+    void updateMetadata_failure_throwsWriteException() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
+
+        Map<String, String> metadata = Map.of("calculated_triage_tier", "HIGH");
+
+        assertThrows(dDBWriteFailedException.class, () -> jobDAO.updateMetadata(JOB_ID, metadata));
+    }
 }

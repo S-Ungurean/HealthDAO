@@ -1,5 +1,7 @@
 package org.dao.imp;
 
+import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 
 import org.dao.JobDAO;
@@ -34,6 +36,8 @@ public class JobDAOImp implements JobDAO {
     private static String updateInputObjectKeyStatement = "UPDATE job_ks.jobs SET inputObjectKey = ? WHERE jobId = ?";
     private static String updateStatusStatement = "UPDATE job_ks.jobs SET status = ? WHERE jobId = ?";
     private static String checkFileHashStatement = "SELECT jobId FROM job_ks.jobs WHERE fileHash = ? LIMIT 1";
+    private static String updateMetadataStatement = "UPDATE job_ks.jobs SET metadata = metadata + ? WHERE jobId = ?";
+    private static String insertTextOnlyJobStatement = "INSERT INTO job_ks.jobs (jobId, status, timeStamp, metadata) VALUES (?, ?, ?, ?)";
 
     private PreparedStatement psCheckFileHash;
 
@@ -201,6 +205,57 @@ public class JobDAOImp implements JobDAO {
         } catch (NullPointerException e) {
             log.error("Failed to write record with jobId: " + jobId);
             throw new dDBWriteFailedException("Failed to write job record");
+        }
+    }
+
+    @Override
+    public void updateMetadata(String jobId, Map<String, String> metadata) {
+        log.info("Updating metadata for record with id: " + jobId);
+
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+            PreparedStatement updateMetadata = cqlSession.prepare(updateMetadataStatement);
+            BoundStatement bound = updateMetadata.bind(metadata, jobId);
+            cqlSession.execute(bound);
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Cluster availability issue while updating metadata for jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Cluster unavailable for metadata update", e);
+        } catch (QueryValidationException e) {
+            log.error("Invalid query for jobId {}: {}", jobId, e.getMessage(), e);
+            throw new dDBWriteFailedException("Invalid query for metadata update", e);
+        } catch (DriverException e) {
+            log.error("Unexpected Cassandra driver error for jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Unexpected Cassandra error", e);
+        } catch (NullPointerException e) {
+            log.error("Failed to update metadata for jobId: " + jobId);
+            throw new dDBWriteFailedException("Failed to update metadata");
+        }
+    }
+
+    @Override
+    public void createTextOnlyJob(String jobId, Map<String, String> metadata) {
+        log.info("Writing text-only job record with id: " + jobId);
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+            PreparedStatement insert = cqlSession.prepare(insertTextOnlyJobStatement);
+            BoundStatement bs = insert.bind(
+                jobId,
+                Status.safeToValue(Status.SUCCESS),
+                Instant.now().toString(),
+                metadata);
+            cqlSession.execute(bs);
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Failed to write text-only job record with jobId: " + jobId);
+            throw new dDBWriteFailedException("Failed to write text-only job record");
+        } catch (QueryValidationException e) {
+            log.error("Failed to write text-only job record with jobId: " + jobId);
+            throw new dDBWriteFailedException("Failed to write text-only job record");
+        } catch (DriverException e) {
+            log.error("Failed to write text-only job record with jobId: " + jobId);
+            throw new dDBWriteFailedException("Failed to write text-only job record");
+        } catch (NullPointerException e) {
+            log.error("Failed to write text-only job record with jobId: " + jobId);
+            throw new dDBWriteFailedException("Failed to write text-only job record");
         }
     }
 

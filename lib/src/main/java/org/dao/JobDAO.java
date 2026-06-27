@@ -1,5 +1,6 @@
 package org.dao;
 
+import java.util.Map;
 import java.util.Optional;
 
 import org.dao.models.JobDTO;
@@ -18,4 +19,8 @@ public interface JobDAO {
     void updateStatus(String jobId, Status status);
 
     boolean hasFileHash(String fileHash);
+
+    void updateMetadata(String jobId, Map<String, String> metadata);
+
+    void createTextOnlyJob(String jobId, Map<String, String> metadata);
 }
