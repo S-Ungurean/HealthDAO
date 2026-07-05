@@ -32,10 +32,10 @@ public class JobDAOImp implements JobDAO {
 
     private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata, fileHash) VALUES (?, ?, ?, ?, ?, ?, ?)";
     private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, modelResults, metadata, fileHash FROM job_ks.jobs WHERE jobId = ?";
-    private static String updateResultObjectKeyAndStatusAndModelResultsStatement = "UPDATE job_ks.jobs SET resultObjectKey = ?, status = ?, modelResults = ? WHERE jobId = ?";
-    private static String updateInputObjectKeyStatement = "UPDATE job_ks.jobs SET inputObjectKey = ? WHERE jobId = ?";
+    private static String updateResultObjectKeyStatement = "UPDATE job_ks.jobs SET resultObjectKey = ? WHERE jobId = ?";
     private static String updateStatusStatement = "UPDATE job_ks.jobs SET status = ? WHERE jobId = ?";
     private static String checkFileHashStatement = "SELECT jobId FROM job_ks.jobs WHERE fileHash = ? LIMIT 1";
+    private static String updateStatusAndModelResultsStatement = "UPDATE job_ks.jobs SET status = ?, modelResults = ? WHERE jobId = ?";
     private static String updateMetadataStatement = "UPDATE job_ks.jobs SET metadata = metadata + ? WHERE jobId = ?";
     private static String insertTextOnlyJobStatement = "INSERT INTO job_ks.jobs (jobId, status, timeStamp, metadata) VALUES (?, ?, ?, ?)";
 
@@ -137,13 +137,12 @@ public class JobDAOImp implements JobDAO {
     }
 
     @Override
-    public void updateResultObjectKeyAndStatusAndModelResults(String jobId, String objectKey, Status status, String modelResults) {
+    public void updateResultObjectKey(String jobId, String objectKey) {
         log.info("Updating result object key for record with id: " + jobId);
-
         try {
             CqlSession cqlSession = cassandraClient.getSession();
-            PreparedStatement updateResultObjectKey = cqlSession.prepare(updateResultObjectKeyAndStatusAndModelResultsStatement);
-            BoundStatement bound = updateResultObjectKey.bind(objectKey, status.toValue(), modelResults, jobId);
+            PreparedStatement ps = cqlSession.prepare(updateResultObjectKeyStatement);
+            BoundStatement bound = ps.bind(objectKey, jobId);
             cqlSession.execute(bound);
         } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
             log.error("Cluster availability issue while writing jobId {}", jobId, e);
@@ -161,13 +160,12 @@ public class JobDAOImp implements JobDAO {
     }
 
     @Override
-    public void updateInputObjectKey(String jobId, String objectKey) {
-        log.info("Updating input object key for record with id: " + jobId);
-
+    public void updateStatusAndModelResults(String jobId, Status status, String modelResults) {
+        log.info("Updating status and model results for record with id: " + jobId);
         try {
             CqlSession cqlSession = cassandraClient.getSession();
-            PreparedStatement updateInputObjectKey = cqlSession.prepare(updateInputObjectKeyStatement);
-            BoundStatement bound = updateInputObjectKey.bind(objectKey, jobId);
+            PreparedStatement ps = cqlSession.prepare(updateStatusAndModelResultsStatement);
+            BoundStatement bound = ps.bind(status.toValue(), modelResults, jobId);
             cqlSession.execute(bound);
         } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
             log.error("Cluster availability issue while writing jobId {}", jobId, e);
