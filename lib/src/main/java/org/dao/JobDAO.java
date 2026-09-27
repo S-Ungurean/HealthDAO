@@ -1,10 +1,12 @@
 package org.dao;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import org.dao.models.JobDTO;
 import org.dao.models.JobRequest;
+import org.dao.models.JobSummaryDTO;
 import org.dao.models.Status;
 
 public interface JobDAO {
@@ -32,4 +34,13 @@ public interface JobDAO {
 
     /** Creates a text-only survey job record with no associated image. */
     void createTextOnlyJob(String jobId, Map<String, String> metadata);
+
+    /** Stamps a job with its owning userId and records it in the jobs_by_user history index. */
+    void attributeOwner(String jobId, String userId, String timeStamp);
+
+    /** Returns the owning userId for the job with the given result object key, or empty if the job has no owner or doesn't exist. */
+    Optional<String> findOwnerByResultObjectKey(String resultObjectKey);
+
+    /** Returns a user's upload history (jobId + timeStamp), most recent first. */
+    List<JobSummaryDTO> findJobsByUser(String userId);
 }

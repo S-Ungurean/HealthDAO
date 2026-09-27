@@ -1,7 +1,5 @@
 package org.dao.models;
 
-import java.util.Map;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -14,26 +12,11 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class JobDTO {
-    
+public class JobSummaryDTO {
+
     @NonNull
     private String jobId;
 
-    private String resultObjectKey;
-
-    private String inputObjectKey;
-
-    private Status status;
-
     @NonNull
     private String timeStamp;
-
-    private Map<String, String> metadata;
-
-    private String modelResults;
-
-    private String fileHash;
-
-    private String userId;
-
 }

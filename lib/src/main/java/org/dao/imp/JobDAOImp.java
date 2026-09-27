@@ -1,6 +1,8 @@
 package org.dao.imp;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -10,12 +12,15 @@ import org.dao.exceptions.dDBReadFailedException;
 import org.dao.exceptions.dDBWriteFailedException;
 import org.dao.models.JobDTO;
 import org.dao.models.JobRequest;
+import org.dao.models.JobSummaryDTO;
 import org.dao.models.Status;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.DriverException;
 import com.datastax.oss.driver.api.core.NoNodeAvailableException;
+import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import com.datastax.oss.driver.api.core.cql.DefaultBatchType;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
@@ -30,14 +35,20 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class JobDAOImp implements JobDAO {
 
+    private static final int JOBS_BY_USER_LIMIT = 200;
+
     private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata, fileHash) VALUES (?, ?, ?, ?, ?, ?, ?)";
-    private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, modelResults, metadata, fileHash FROM job_ks.jobs WHERE jobId = ?";
+    private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, modelResults, metadata, fileHash, userId FROM job_ks.jobs WHERE jobId = ?";
     private static String updateResultObjectKeyStatement = "UPDATE job_ks.jobs SET resultObjectKey = ? WHERE jobId = ?";
     private static String updateStatusStatement = "UPDATE job_ks.jobs SET status = ? WHERE jobId = ?";
     private static String checkFileHashStatement = "SELECT jobId FROM job_ks.jobs WHERE fileHash = ? LIMIT 1";
     private static String updateStatusAndModelResultsStatement = "UPDATE job_ks.jobs SET status = ?, modelResults = ? WHERE jobId = ?";
     private static String updateMetadataStatement = "UPDATE job_ks.jobs SET metadata = metadata + ? WHERE jobId = ?";
     private static String insertTextOnlyJobStatement = "INSERT INTO job_ks.jobs (jobId, status, timeStamp, metadata) VALUES (?, ?, ?, ?)";
+    private static String updateOwnerStatement = "UPDATE job_ks.jobs SET userId = ? WHERE jobId = ?";
+    private static String insertJobsByUserStatement = "INSERT INTO job_ks.jobs_by_user (userId, timeStamp, jobId) VALUES (?, ?, ?)";
+    private static String queryOwnerByResultObjectKeyStatement = "SELECT userId FROM job_ks.jobs WHERE resultObjectKey = ? LIMIT 1";
+    private static String queryJobsByUserStatement = "SELECT jobId, timeStamp FROM job_ks.jobs_by_user WHERE userId = ? LIMIT " + JOBS_BY_USER_LIMIT;
 
     private PreparedStatement psCheckFileHash;
 
@@ -118,6 +129,7 @@ public class JobDAOImp implements JobDAO {
                 .metadata(row.getMap("metadata", String.class, String.class))
                 .modelResults(row.getString("modelResults"))
                 .fileHash(row.getString("fileHash"))
+                .userId(row.getString("userId"))
                 .build();
 
             return Optional.ofNullable(jobDTO);
@@ -280,6 +292,93 @@ public class JobDAOImp implements JobDAO {
             throw new dDBReadFailedException("Invalid query (Missing Index?)", e);
         } catch (DriverException e) {
             log.error("Unexpected Cassandra driver error for fileHash {}", fileHash, e);
+            throw new dDBReadFailedException("Unexpected Cassandra error", e);
+        }
+    }
+
+    @Override
+    public void attributeOwner(String jobId, String userId, String timeStamp) {
+        log.info("Attributing jobId {} to userId", jobId);
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+
+            PreparedStatement updateOwner = cqlSession.prepare(updateOwnerStatement);
+            BoundStatement ownerBound = updateOwner.bind(userId, jobId);
+
+            PreparedStatement insertHistory = cqlSession.prepare(insertJobsByUserStatement);
+            BoundStatement historyBound = insertHistory.bind(userId, timeStamp, jobId);
+
+            BatchStatement batch = BatchStatement.builder(DefaultBatchType.LOGGED)
+                .addStatement(ownerBound)
+                .addStatement(historyBound)
+                .build();
+
+            cqlSession.execute(batch);
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Cluster availability issue while attributing jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Cluster unavailable for owner attribution", e);
+        } catch (QueryValidationException e) {
+            log.error("Invalid query while attributing jobId {}: {}", jobId, e.getMessage(), e);
+            throw new dDBWriteFailedException("Invalid query for owner attribution", e);
+        } catch (DriverException e) {
+            log.error("Unexpected Cassandra driver error while attributing jobId {}", jobId, e);
+            throw new dDBWriteFailedException("Unexpected Cassandra error", e);
+        } catch (NullPointerException e) {
+            log.error("Failed to attribute jobId: " + jobId);
+            throw new dDBWriteFailedException("Failed to attribute job owner");
+        }
+    }
+
+    @Override
+    public Optional<String> findOwnerByResultObjectKey(String resultObjectKey) {
+        log.debug("Looking up owner for resultObjectKey");
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+            PreparedStatement lookup = cqlSession.prepare(queryOwnerByResultObjectKeyStatement);
+            BoundStatement bound = lookup.bind(resultObjectKey);
+
+            Row row = cqlSession.execute(bound).one();
+            if (row == null) {
+                return Optional.empty();
+            }
+            return Optional.ofNullable(row.getString("userId"));
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Cluster availability issue while looking up resultObjectKey owner", e);
+            throw new dDBReadFailedException("Cluster unavailable for owner lookup", e);
+        } catch (QueryValidationException e) {
+            log.error("Invalid query for resultObjectKey owner lookup: {}. Did you create the INDEX?", e.getMessage(), e);
+            throw new dDBReadFailedException("Invalid query (Missing Index?)", e);
+        } catch (DriverException e) {
+            log.error("Unexpected Cassandra driver error for resultObjectKey owner lookup", e);
+            throw new dDBReadFailedException("Unexpected Cassandra error", e);
+        }
+    }
+
+    @Override
+    public List<JobSummaryDTO> findJobsByUser(String userId) {
+        log.info("Querying job history for userId");
+        try {
+            CqlSession cqlSession = cassandraClient.getSession();
+            PreparedStatement queryJobsByUser = cqlSession.prepare(queryJobsByUserStatement);
+            BoundStatement bound = queryJobsByUser.bind(userId);
+
+            ResultSet rs = cqlSession.execute(bound);
+            List<JobSummaryDTO> summaries = new ArrayList<>();
+            for (Row row : rs) {
+                summaries.add(JobSummaryDTO.builder()
+                    .jobId(row.getString("jobId"))
+                    .timeStamp(row.getString("timeStamp"))
+                    .build());
+            }
+            return summaries;
+        } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
+            log.error("Cluster availability issue while querying job history for userId", e);
+            throw new dDBReadFailedException("Cluster unavailable for job history read", e);
+        } catch (QueryValidationException e) {
+            log.error("Invalid query for job history: {}", e.getMessage(), e);
+            throw new dDBReadFailedException("Invalid query for job history read", e);
+        } catch (DriverException e) {
+            log.error("Unexpected Cassandra driver error for job history read", e);
             throw new dDBReadFailedException("Unexpected Cassandra error", e);
         }
     }

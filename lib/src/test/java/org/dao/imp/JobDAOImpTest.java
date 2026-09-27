@@ -10,6 +10,7 @@ import org.dao.exceptions.dDBReadFailedException;
 import org.dao.exceptions.dDBWriteFailedException;
 import org.dao.models.JobDTO;
 import org.dao.models.JobRequest;
+import org.dao.models.JobSummaryDTO;
 import org.dao.models.Status;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -107,11 +110,15 @@ public class JobDAOImpTest {
         when(row.getString("timeStamp")).thenReturn("2023-01-01T00:00:00");
         when(row.getMap(eq("metadata"), eq(String.class), eq(String.class)))
                 .thenReturn(Map.of("key", "value"));
+        when(row.getString("modelResults")).thenReturn(null);
+        when(row.getString("fileHash")).thenReturn(null);
+        when(row.getString("userId")).thenReturn(null);
 
         Optional<JobDTO> result = jobDAO.findByJobId("job123");
 
         assertTrue(result.isPresent());
         assertEquals("job123", result.get().getJobId());
+        assertNull(result.get().getUserId());
     }
 
     @Test
@@ -243,5 +250,124 @@ public class JobDAOImpTest {
         Map<String, String> metadata = Map.of("calculated_triage_tier", "HIGH");
 
         assertThrows(dDBWriteFailedException.class, () -> jobDAO.updateMetadata(JOB_ID, metadata));
+    }
+
+    // ----------- attributeOwner ------------------
+
+    @Test
+    void attributeOwner_success() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any(), any())).thenReturn(boundStatement);
+        when(preparedStatement.bind(any(), any(), any())).thenReturn(boundStatement);
+
+        assertDoesNotThrow(() -> jobDAO.attributeOwner("job123", "user-456", "2026-08-16T00:00:00Z"));
+
+        verify(cqlSession).execute(any(BatchStatement.class));
+    }
+
+    @Test
+    void attributeOwner_failure_throwsWriteException() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
+
+        assertThrows(dDBWriteFailedException.class,
+                () -> jobDAO.attributeOwner("job123", "user-456", "2026-08-16T00:00:00Z"));
+    }
+
+    // ----------- findOwnerByResultObjectKey ------------------
+
+    @Test
+    void findOwnerByResultObjectKey_ownedJob_returnsUserId() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
+        when(resultSet.one()).thenReturn(row);
+        when(row.getString("userId")).thenReturn("user-456");
+
+        Optional<String> result = jobDAO.findOwnerByResultObjectKey("s3-key");
+
+        assertTrue(result.isPresent());
+        assertEquals("user-456", result.get());
+    }
+
+    @Test
+    void findOwnerByResultObjectKey_anonymousJob_returnsEmpty() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
+        when(resultSet.one()).thenReturn(row);
+        when(row.getString("userId")).thenReturn(null);
+
+        Optional<String> result = jobDAO.findOwnerByResultObjectKey("s3-key");
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void findOwnerByResultObjectKey_noMatchingJob_returnsEmpty() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
+        when(resultSet.one()).thenReturn(null);
+
+        Optional<String> result = jobDAO.findOwnerByResultObjectKey("missing-key");
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void findOwnerByResultObjectKey_failure_throwsReadException() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
+
+        assertThrows(dDBReadFailedException.class,
+                () -> jobDAO.findOwnerByResultObjectKey("s3-key"));
+    }
+
+    // ----------- findJobsByUser ------------------
+
+    @Test
+    void findJobsByUser_returnsSummariesInOrder() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
+
+        Row row1 = mock(Row.class);
+        when(row1.getString("jobId")).thenReturn("job-2");
+        when(row1.getString("timeStamp")).thenReturn("2026-08-15T00:00:00Z");
+        Row row2 = mock(Row.class);
+        when(row2.getString("jobId")).thenReturn("job-1");
+        when(row2.getString("timeStamp")).thenReturn("2026-08-01T00:00:00Z");
+
+        when(resultSet.iterator()).thenReturn(List.of(row1, row2).iterator());
+
+        List<JobSummaryDTO> result = jobDAO.findJobsByUser("user-456");
+
+        assertEquals(2, result.size());
+        assertEquals("job-2", result.get(0).getJobId());
+        assertEquals("job-1", result.get(1).getJobId());
+    }
+
+    @Test
+    void findJobsByUser_empty_returnsEmptyList() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
+        when(resultSet.iterator()).thenReturn(Collections.emptyIterator());
+
+        List<JobSummaryDTO> result = jobDAO.findJobsByUser("user-456");
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void findJobsByUser_failure_throwsReadException() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
+
+        assertThrows(dDBReadFailedException.class, () -> jobDAO.findJobsByUser("user-456"));
     }
 }
