@@ -36,4 +36,6 @@ public class JobDTO {
 
     private String userId;
 
+    private String animalType;
+
 }

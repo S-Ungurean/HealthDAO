@@ -35,20 +35,19 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class JobDAOImp implements JobDAO {
 
-    private static final int JOBS_BY_USER_LIMIT = 200;
-
-    private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata, fileHash) VALUES (?, ?, ?, ?, ?, ?, ?)";
-    private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, modelResults, metadata, fileHash, userId FROM job_ks.jobs WHERE jobId = ?";
+    private static String insertStatement = "INSERT INTO job_ks.jobs (jobId, status, resultObjectKey, inputObjectKey, timeStamp, metadata, fileHash, animalType) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    private static String queryByJobIdStatement = "SELECT jobId, status, resultObjectKey, inputObjectKey, timeStamp, modelResults, metadata, fileHash, userId, animalType FROM job_ks.jobs WHERE jobId = ?";
     private static String updateResultObjectKeyStatement = "UPDATE job_ks.jobs SET resultObjectKey = ? WHERE jobId = ?";
     private static String updateStatusStatement = "UPDATE job_ks.jobs SET status = ? WHERE jobId = ?";
     private static String checkFileHashStatement = "SELECT jobId FROM job_ks.jobs WHERE fileHash = ? LIMIT 1";
     private static String updateStatusAndModelResultsStatement = "UPDATE job_ks.jobs SET status = ?, modelResults = ? WHERE jobId = ?";
     private static String updateMetadataStatement = "UPDATE job_ks.jobs SET metadata = metadata + ? WHERE jobId = ?";
-    private static String insertTextOnlyJobStatement = "INSERT INTO job_ks.jobs (jobId, status, timeStamp, metadata) VALUES (?, ?, ?, ?)";
+    private static String insertTextOnlyJobStatement = "INSERT INTO job_ks.jobs (jobId, status, timeStamp, metadata, animalType) VALUES (?, ?, ?, ?, ?)";
     private static String updateOwnerStatement = "UPDATE job_ks.jobs SET userId = ? WHERE jobId = ?";
     private static String insertJobsByUserStatement = "INSERT INTO job_ks.jobs_by_user (userId, timeStamp, jobId) VALUES (?, ?, ?)";
     private static String queryOwnerByResultObjectKeyStatement = "SELECT userId FROM job_ks.jobs WHERE resultObjectKey = ? LIMIT 1";
-    private static String queryJobsByUserStatement = "SELECT jobId, timeStamp FROM job_ks.jobs_by_user WHERE userId = ? LIMIT " + JOBS_BY_USER_LIMIT;
+    private static String queryJobsByUserStatement = "SELECT jobId, timeStamp FROM job_ks.jobs_by_user WHERE userId = ? LIMIT ?";
+    private static String queryJobsByUserBeforeStatement = "SELECT jobId, timeStamp FROM job_ks.jobs_by_user WHERE userId = ? AND timeStamp < ? LIMIT ?";
 
     private PreparedStatement psCheckFileHash;
 
@@ -74,6 +73,8 @@ public class JobDAOImp implements JobDAO {
             .jobId(request.getJobId())
             .timeStamp(request.getTimeStamp().toString())
             .fileHash(request.getFileHash())
+            .inputObjectKey(request.getInputObjectKey())
+            .animalType(request.getAnimalType())
             .build();
         
         try {
@@ -87,7 +88,8 @@ public class JobDAOImp implements JobDAO {
                 jobDTO.getInputObjectKey(),
                 jobDTO.getTimeStamp(),
                 jobDTO.getMetadata(),
-                jobDTO.getFileHash());
+                jobDTO.getFileHash(),
+                jobDTO.getAnimalType());
             cqlSession.execute(bs);
         } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
             log.error("Failed to write record with jobId: " + request.getJobId());
@@ -130,6 +132,7 @@ public class JobDAOImp implements JobDAO {
                 .modelResults(row.getString("modelResults"))
                 .fileHash(row.getString("fileHash"))
                 .userId(row.getString("userId"))
+                .animalType(row.getString("animalType"))
                 .build();
 
             return Optional.ofNullable(jobDTO);
@@ -243,7 +246,7 @@ public class JobDAOImp implements JobDAO {
     }
 
     @Override
-    public void createTextOnlyJob(String jobId, Map<String, String> metadata) {
+    public void createTextOnlyJob(String jobId, Map<String, String> metadata, String animalType) {
         log.info("Writing text-only job record with id: " + jobId);
         try {
             CqlSession cqlSession = cassandraClient.getSession();
@@ -252,7 +255,8 @@ public class JobDAOImp implements JobDAO {
                 jobId,
                 Status.safeToValue(Status.SUCCESS),
                 Instant.now().toString(),
-                metadata);
+                metadata,
+                animalType);
             cqlSession.execute(bs);
         } catch (NoNodeAvailableException | UnavailableException | ReadTimeoutException | WriteTimeoutException e) {
             log.error("Failed to write text-only job record with jobId: " + jobId);
@@ -355,12 +359,13 @@ public class JobDAOImp implements JobDAO {
     }
 
     @Override
-    public List<JobSummaryDTO> findJobsByUser(String userId) {
+    public List<JobSummaryDTO> findJobsByUser(String userId, int limit, String before) {
         log.info("Querying job history for userId");
         try {
             CqlSession cqlSession = cassandraClient.getSession();
-            PreparedStatement queryJobsByUser = cqlSession.prepare(queryJobsByUserStatement);
-            BoundStatement bound = queryJobsByUser.bind(userId);
+            BoundStatement bound = before == null
+                ? cqlSession.prepare(queryJobsByUserStatement).bind(userId, limit)
+                : cqlSession.prepare(queryJobsByUserBeforeStatement).bind(userId, before, limit);
 
             ResultSet rs = cqlSession.execute(bound);
             List<JobSummaryDTO> summaries = new ArrayList<>();

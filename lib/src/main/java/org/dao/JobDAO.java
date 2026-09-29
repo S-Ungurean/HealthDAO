@@ -33,7 +33,7 @@ public interface JobDAO {
     void updateMetadata(String jobId, Map<String, String> metadata);
 
     /** Creates a text-only survey job record with no associated image. */
-    void createTextOnlyJob(String jobId, Map<String, String> metadata);
+    void createTextOnlyJob(String jobId, Map<String, String> metadata, String animalType);
 
     /** Stamps a job with its owning userId and records it in the jobs_by_user history index. */
     void attributeOwner(String jobId, String userId, String timeStamp);
@@ -41,6 +41,6 @@ public interface JobDAO {
     /** Returns the owning userId for the job with the given result object key, or empty if the job has no owner or doesn't exist. */
     Optional<String> findOwnerByResultObjectKey(String resultObjectKey);
 
-    /** Returns a user's upload history (jobId + timeStamp), most recent first. */
-    List<JobSummaryDTO> findJobsByUser(String userId);
+    /** Returns up to {@code limit} of a user's jobs (jobId + timeStamp), most recent first, older than {@code before} when it's non-null. */
+    List<JobSummaryDTO> findJobsByUser(String userId, int limit, String before);
 }

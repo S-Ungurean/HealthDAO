@@ -80,11 +80,25 @@ public class JobDAOImpTest {
     void createJob_success() {
         when(cassandraClient.getSession()).thenReturn(cqlSession);
         when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(any(), any(), any(), any(), any(), any(), any())).thenReturn(boundStatement);
+        when(preparedStatement.bind(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(boundStatement);
 
         assertDoesNotThrow(() -> jobDAO.createJob(request));
 
+        verify(preparedStatement).bind(JOB_ID, "INPROGRESS", null, null, TIMESTAMP.toString(), null, FILE_HASH, null);
         verify(cqlSession).execute(boundStatement);
+    }
+
+    @Test
+    void createJob_bindsInputObjectKeyAndAnimalType() {
+        request.setInputObjectKey("uploads/cat.jpg");
+        request.setAnimalType("cat");
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(boundStatement);
+
+        jobDAO.createJob(request);
+
+        verify(preparedStatement).bind(JOB_ID, "INPROGRESS", null, "uploads/cat.jpg", TIMESTAMP.toString(), null, FILE_HASH, "cat");
     }
 
     @Test
@@ -113,12 +127,36 @@ public class JobDAOImpTest {
         when(row.getString("modelResults")).thenReturn(null);
         when(row.getString("fileHash")).thenReturn(null);
         when(row.getString("userId")).thenReturn(null);
+        when(row.getString("animalType")).thenReturn("dog");
 
         Optional<JobDTO> result = jobDAO.findByJobId("job123");
 
         assertTrue(result.isPresent());
         assertEquals("job123", result.get().getJobId());
         assertNull(result.get().getUserId());
+        assertEquals("dog", result.get().getAnimalType());
+    }
+
+    // ----------- createTextOnlyJob ------------------
+    @Test
+    void createTextOnlyJob_bindsAnimalType() {
+        Map<String, String> metadata = Map.of("calculated_triage_tier", "LOW");
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any(), any(), any(), any(), any())).thenReturn(boundStatement);
+
+        jobDAO.createTextOnlyJob(JOB_ID, metadata, "cat");
+
+        verify(preparedStatement).bind(eq(JOB_ID), eq("SUCCESS"), anyString(), eq(metadata), eq("cat"));
+        verify(cqlSession).execute(boundStatement);
+    }
+
+    @Test
+    void createTextOnlyJob_failure_throwsWriteException() {
+        when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
+
+        assertThrows(dDBWriteFailedException.class,
+                () -> jobDAO.createTextOnlyJob(JOB_ID, Map.of(), null));
     }
 
     @Test
@@ -332,7 +370,7 @@ public class JobDAOImpTest {
     void findJobsByUser_returnsSummariesInOrder() {
         when(cassandraClient.getSession()).thenReturn(cqlSession);
         when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(preparedStatement.bind(any(), any())).thenReturn(boundStatement);
         when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
 
         Row row1 = mock(Row.class);
@@ -344,22 +382,38 @@ public class JobDAOImpTest {
 
         when(resultSet.iterator()).thenReturn(List.of(row1, row2).iterator());
 
-        List<JobSummaryDTO> result = jobDAO.findJobsByUser("user-456");
+        List<JobSummaryDTO> result = jobDAO.findJobsByUser("user-456", 20, null);
 
         assertEquals(2, result.size());
         assertEquals("job-2", result.get(0).getJobId());
         assertEquals("job-1", result.get(1).getJobId());
+        verify(cqlSession).prepare("SELECT jobId, timeStamp FROM job_ks.jobs_by_user WHERE userId = ? LIMIT ?");
+        verify(preparedStatement).bind("user-456", 20);
+    }
+
+    @Test
+    void findJobsByUser_withCursor_queriesOlderThanCursor() {
+        when(cassandraClient.getSession()).thenReturn(cqlSession);
+        when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any(), any(), any())).thenReturn(boundStatement);
+        when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
+        when(resultSet.iterator()).thenReturn(Collections.emptyIterator());
+
+        jobDAO.findJobsByUser("user-456", 20, "2026-08-01T00:00:00Z");
+
+        verify(cqlSession).prepare("SELECT jobId, timeStamp FROM job_ks.jobs_by_user WHERE userId = ? AND timeStamp < ? LIMIT ?");
+        verify(preparedStatement).bind("user-456", "2026-08-01T00:00:00Z", 20);
     }
 
     @Test
     void findJobsByUser_empty_returnsEmptyList() {
         when(cassandraClient.getSession()).thenReturn(cqlSession);
         when(cqlSession.prepare(anyString())).thenReturn(preparedStatement);
-        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+        when(preparedStatement.bind(any(), any())).thenReturn(boundStatement);
         when(cqlSession.execute(boundStatement)).thenReturn(resultSet);
         when(resultSet.iterator()).thenReturn(Collections.emptyIterator());
 
-        List<JobSummaryDTO> result = jobDAO.findJobsByUser("user-456");
+        List<JobSummaryDTO> result = jobDAO.findJobsByUser("user-456", 20, null);
 
         assertTrue(result.isEmpty());
     }
@@ -368,6 +422,6 @@ public class JobDAOImpTest {
     void findJobsByUser_failure_throwsReadException() {
         when(cassandraClient.getSession()).thenThrow(new NoNodeAvailableException());
 
-        assertThrows(dDBReadFailedException.class, () -> jobDAO.findJobsByUser("user-456"));
+        assertThrows(dDBReadFailedException.class, () -> jobDAO.findJobsByUser("user-456", 20, null));
     }
 }

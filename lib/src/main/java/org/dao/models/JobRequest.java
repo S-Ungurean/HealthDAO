@@ -26,4 +26,8 @@ public class JobRequest {
 
     @NonNull
     private String fileHash;
+
+    private String inputObjectKey;
+
+    private String animalType;
 }
